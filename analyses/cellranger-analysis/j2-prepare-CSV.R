@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(tidyverse)
   library(readxl)
   library(yaml)
+  library(glue)
 })
 
 
@@ -41,37 +42,44 @@ project_metadata_file <- file.path(metadata_dir, metadata_file) # metadata input
 
 # Read metadata file and define `sample_name`
 project_metadata <- read.csv(project_metadata_file, sep = "\t", header = TRUE)
-sample_name <- unique(as.character(project_metadata$ID))
+sample_name <- unique(as.character(project_metadata$sample_id))
 sample_name <- sort(sample_name, decreasing = FALSE)
 print(sample_name)
-#################################################################################
 
-##################################################################################################################################################################
 # Process each sample
-for (i in seq_along(sample_name)) {
-  sample_input_dir <- file.path(input_dir, "outs", "per_sample_outs", sample_name[i]) 
-  #print(sample_input_dir)
-  input_file <- c(dir(path = sample_input_dir,  pattern = "metrics_summary.csv", full.names = TRUE, recursive = TRUE))
-  print(input_file)
+multi_config_dirs <- Sys.glob(file.path(input_dir, cellranger_parameters, "multi_config_*"))
+
+for (config_dir in multi_config_dirs) {
+  per_sample_outs_dir <- file.path(config_dir, glue("multi_run_{cellranger_parameters}"), "outs", "per_sample_outs")
   
-  if (length(input_file) == 0) {
-    warning(glue::glue("No metrics_summary.csv found for sample {sample_name[i]}"))
-    next
-  } else if (length(input_file) > 1) {
-    warning(glue::glue("Multiple metrics_summary.csv files found for sample {sample_name[i]}; using the first one."))
-    input_file <- input_file[1]
+  # List all sample folders found in this directory
+  samples_found <- list.dirs(per_sample_outs_dir, full.names = FALSE, recursive = FALSE)
+  
+  for (sample in samples_found) {
+    cat("Beginning process for:", sample, "\n")
+    sample_input_dir <- file.path(per_sample_outs_dir, sample)
+    input_file <- dir(path = sample_input_dir, pattern = "metrics_summary.csv", full.names = TRUE, recursive = TRUE)
+    
+    if (length(input_file) == 0) {
+      warning(glue("No metrics_summary.csv found for sample {sample} in {sample_input_dir}"))
+      next
+    } else if (length(input_file) > 1) {
+      warning(glue("Multiple metrics_summary.csv files found for sample {sample} in {sample_input_dir}; using the first one."))
+      input_file <- input_file[1]
+    }
+    
+    # No numeric conversion is done — we’re preserving original text like "33,635 (81.37%)".
+    processed_input_df <- read.csv(input_file, header = TRUE, stringsAsFactors = FALSE) %>% 
+      mutate(Category.Metric.Name = paste0(Category, ": ", Metric.Name)) %>% 
+      select(Category.Metric.Name, Metric.Value) %>% 
+      rename(Category_Metric_Name = dplyr::matches("Category.?Metric.?Name"), Metric_Value = dplyr::matches("Metric.?Value")) %>% 
+      pivot_wider(names_from = Category_Metric_Name, values_from = Metric_Value, values_fn = dplyr::first) %>% # or `list` if you want to preserve duplicates
+      write_csv(file.path(per_sample_outs_dir, sample, paste0("metrics_summary_updated.csv")))   # save data 
+    
+    #print(head(processed_input_df))
+    cat("Complete process for:", sample, "\n")
+
   }
-  
-  # No numeric conversion is done — we’re preserving original text like "33,635 (81.37%)".
-  processed_input_df <- read.csv(input_file, header = TRUE, stringsAsFactors = FALSE) %>% 
-    mutate(Category.Metric.Name = paste0(Category, ": ", Metric.Name)) %>% 
-    select(Category.Metric.Name, Metric.Value) %>% 
-    rename(Category_Metric_Name = dplyr::matches("Category.?Metric.?Name"), Metric_Value = dplyr::matches("Metric.?Value")) %>% 
-    pivot_wider(names_from = Category_Metric_Name, values_from = Metric_Value, values_fn = dplyr::first) %>% # or `list` if you want to preserve duplicates
-    write_csv(file.path(results_dir, sample_name[i], paste0("metrics_summary_updated.csv")))   # save data 
-  
-  head(processed_input_df)
-  
 }
 
 ##################################################################################################################################################################

@@ -1,2 +1,2 @@
 ID	SAMPLE	FASTQ
-sample1	seq_submission_code1_sample1	/absolute_path/seq_submission_code1/
+library_ID1	seq_submission_code1_library_ID1	/absolute_path/seq_submission_code1/

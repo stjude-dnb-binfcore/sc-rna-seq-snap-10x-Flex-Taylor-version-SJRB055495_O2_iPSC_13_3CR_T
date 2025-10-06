@@ -33,7 +33,7 @@ done
 check_jobs() {
     # Loop through each prefix and check for jobs
     for job_prefix in "${sample_prefix[@]}"; do
-        pattern="${job_prefix}"
+        pattern="${job_prefix}[0-9]+"
         # Check for jobs using the pattern
         if bjobs | grep -E "$pattern" > /dev/null; then
             echo "Found matching job: $pattern"

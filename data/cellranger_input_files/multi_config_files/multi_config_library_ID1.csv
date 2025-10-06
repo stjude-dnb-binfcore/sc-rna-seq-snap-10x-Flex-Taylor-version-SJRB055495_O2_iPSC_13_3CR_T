@@ -6,7 +6,7 @@ filter-probes,TRUE,,,,
 ,,,,,
 [libraries],,,,,
 fastq_id,fastqs,lanes,physical_library_id,feature_types,subsample_rate
-library_ID,/PATH-TO-FASTQ,any,4plex_RB,Gene Expression,
+library_ID,/PATH-TO-FASTQ,any,library_ID,Gene Expression,
 ,,,,,
 [samples],,,,,
 sample_id,probe_barcode_ids,description,,,

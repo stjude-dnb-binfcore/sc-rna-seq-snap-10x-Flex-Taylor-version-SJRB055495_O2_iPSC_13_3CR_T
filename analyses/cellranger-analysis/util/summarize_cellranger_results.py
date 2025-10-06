@@ -9,9 +9,8 @@ Author:
 	Date: 			May 27, 2025 
 """
 
-import os, sys, argparse, glob, numpy, pandas
+import os, argparse, pandas, glob
 import pandas as pd
-
 
 def dir_path(string):
 	if os.path.isdir(string):
@@ -29,32 +28,34 @@ parser = argparse.ArgumentParser(description="This is a script that will summari
 #Creating the following optional arguments; some have default values
 parser.add_argument('--dir', type=dir_path, help='Data directory path that contains individually named cellranger count results for samples', required=True)
 parser.add_argument('--outdir', type=dir_path, help='Create all output files in the specified output directory. Please note that this directory must exist as the program will not create it.', required=True)
-
-#Converts argument strings to objects and assigns them as attributes of the namespace; e.g. --id -> args.id
-args = parser.parse_args()
+args = parser.parse_args() #Converts argument strings to objects and assigns them as attributes of the namespace; e.g. --id -> args.id
 
 
 MasterDF = pandas.DataFrame()
 
-for filename in glob.glob(os.path.join(args.dir, "*","metrics_summary_updated.csv")):
-    # print(filename)
-    
-    df = pandas.read_csv(filename)
-    
-    # Clean the data by removing commas and percent signs
-    df = df.replace(",", "", regex=True)  # Remove commas for numbers like '33,635'
-    df = df.replace("%", "", regex=True)  # Remove percent signs from values like '81.37%'
+print("args.dir:", args.dir)
+pattern = os.path.join(args.dir, "multi_config_*", "multi_run_*", "outs", "per_sample_outs", "*", "metrics_summary_updated.csv")
+print("Glob pattern:", pattern)
+files = glob.glob(pattern)
+print("Files found:", files)
 
-    # Convert columns to float (assuming all columns are numeric after cleaning)
-    # If only specific columns need conversion, specify the column names like: df["Metric"] = df["Metric"].astype('float')
-    df = df.astype('float', errors='ignore')  # Ignore conversion errors for non-numeric columns
 
+#for filename in glob.glob(os.path.join(args.dir, "*","metrics_summary_updated.csv")):
+for filename in glob.glob(os.path.join(args.dir, "multi_config_*", "multi_run_*", "outs", "per_sample_outs", "*", "metrics_summary_updated.csv")):
+    print("Processing file:", filename)
+    df = pd.read_csv(filename)
+    df = df.replace(",", "", regex=True)
+    df = df.replace("%", "", regex=True)
+    df = df.astype('float', errors='ignore')
     
     SampleID = filename.split("/outs/per_sample_outs/")[1].split("/")[0]
-    print(SampleID)
     df["Sample ID"] = SampleID
+
+    library_name = [part for part in filename.split("/") if part.startswith("multi_config_")]
+    library_value = library_name[0].replace("multi_config_", "") if library_name else "unknown"
+    df["library"] = library_value
     
-    
+    # .... QC Warnings calculation based on Cell Ranger documentation .... #
     Warnings = ""
     MajorWarnings = ""
     TotalWarnings = 0
@@ -69,10 +70,10 @@ for filename in glob.glob(os.path.join(args.dir, "*","metrics_summary_updated.cs
     ### LIBRARY-BASED QC METRICS ####
 
     # Assuming you already have a DataFrame 'df'
-    # Clean the "Mean reads per cell" column by removing any non-numeric characters (e.g., commas)
+     # Clean the "Mean reads per cell" column by removing any non-numeric characters (e.g., commas)
     df["Library: Mean reads per cell"] = df["Library: Mean reads per cell"].replace({",": ""}, regex=True)  # Remove commas
     df["Library: Mean reads per cell"] = pd.to_numeric(df["Library: Mean reads per cell"], errors="coerce")  # This will convert strings to numbers, and non-convertible strings will be NaN
-
+    
     if df.iloc[0]["Library: Mean reads per cell"] < 10000:
         Warnings = Warnings + "Library: Mean reads per cell < 10000, "
         TotalWarnings += 1
@@ -296,11 +297,12 @@ for filename in glob.glob(os.path.join(args.dir, "*","metrics_summary_updated.cs
         TotalWarnings += 1  
     #################################
 
-
+    # .... QC assignments .... #
     df["Warnings"] = Warnings
     df["MajorWarnings"] = MajorWarnings
     df["Total Warnings"] = TotalWarnings
         
-    MasterDF = pandas.concat([MasterDF, df])
+    MasterDF = pd.concat([MasterDF, df], ignore_index=True)
 
-MasterDF.to_csv( args.outdir + "QC_Summary_CellRanger_Report.tsv", sep = "\t", index = False)
+outpath = os.path.join(args.outdir, "QC_Summary_CellRanger_Report.tsv")
+MasterDF.to_csv(outpath, sep="\t", index=False)
