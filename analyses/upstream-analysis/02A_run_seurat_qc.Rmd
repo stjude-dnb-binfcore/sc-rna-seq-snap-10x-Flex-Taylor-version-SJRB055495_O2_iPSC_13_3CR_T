@@ -170,7 +170,7 @@ suppressPackageStartupMessages({
   library(tidyverse)
   library(fs) #file system
   library(RColorBrewer)
-  
+
   # Evaluate Seurat R expressions asynchronously when possible using future package
   options(future.globals.maxSize = future_globals_value) 
   plan(multisession, workers = parallelly::availableCores())})
@@ -189,20 +189,20 @@ palette_file <- file.path(root_dir, "figures", "palettes", "qc_color_palette.tsv
 gradient_palette_file <- file.path(root_dir, "figures", "palettes", "gradient_color_palette.tsv")
 
 # Read metadata file and define `sample_name`
-project_metadata <- read.csv(project_metadata_file, sep = "\t", header = TRUE)
-sample_name <- unique(as.character(project_metadata$ID))
-sample_name <- sort(sample_name, decreasing = FALSE)
-print(sample_name)
+project_metadata <- read.csv(project_metadata_file, sep = '\t', header = TRUE)
+#sample_name <- unique(as.character(project_metadata$ID))
+#sample_name <- sort(sample_name, decreasing = FALSE)
+#print(sample_name)
 
 # File path to `plots` directory
 plots_dir <- file.path(analysis_dir, "plots") 
 seurat_qc_plots_dir <- file.path(plots_dir, "02_Seurat_qc") 
-samples_plots_dir <- file.path(seurat_qc_plots_dir, sample_name[i]) 
+samples_plots_dir <- file.path(seurat_qc_plots_dir, sample) 
 
 # File path to `results` directory
 module_results_dir <- file.path(analysis_dir, paste0("results"))
 seurat_results_dir <- file.path(module_results_dir, paste0("02_Seurat_qc"))
-results_dir <- file.path(seurat_results_dir, sample_name[i])
+results_dir <- file.path(seurat_results_dir, sample)
 
 source(paste0(root_dir, "/figures/scripts/theme_plot.R"))
 source(paste0(analysis_dir, "/util/function-run-QC.R"))
@@ -233,12 +233,12 @@ We will first read read counts in the 10x data. There is the option to use the C
 
 
 ```{r read-process-data, echo=TRUE}
-cat("Beginning to process sample:", sample_name[i], "\n")
+cat("Beginning to process sample:", sample, "\n")
 
 if (use_SoupX_filtering == "YES"){
   print_message <- "we will use SoupX corrected matrix"
   
-   sample_SoupX_input_dir <- file.path(SoupX_results_dir, sample_name[i]) 
+   sample_SoupX_input_dir <- file.path(SoupX_results_dir, sample) 
    SoupX_file <- c(dir(path = sample_SoupX_input_dir,  pattern = "mtx_corrected_SoupX.rds", full.names = TRUE, recursive = TRUE))
 
    counts_mat <- readRDS(SoupX_file)
@@ -252,30 +252,23 @@ if (use_SoupX_filtering == "YES"){
                                        assay = "RNA") 
 
    } else {
+    
     print_message <- "we will skip usage of the SoupX corrected matrix and use the CellRanger matrix"
-
-    input_dir <- file.path(data_dir, "outs", "per_sample_outs", sample_name[i], "count") # CellRanger input file dir
-
-    # File path to data with the filtered_feature_bc_matrix
-    cat(paste(c("", sprintf("`%s`", list.files(paste(input_dir, "/outs"), full.names = TRUE))),
-          collapse = "\n- "))
-    cat("\n\n")
-  
+ 
     # Load counts to a list of matrices
-    counts_mat <- load_sample_counts_matrix(path = input_dir,
-                                            sample_name = sample_name[i])
+    counts_mat <- load_sample_counts_matrix(path = sample_input_dir, sample_name = sample)
+  
     # Create seurat object using gene expression data
-    seurat_obj <- create_seurat_obj(counts_matrix = counts_mat[["Gene Expression"]],
-                                    assay = "RNA") 
+    seurat_obj <- create_seurat_obj(counts_matrix = counts_mat[["Gene Expression"]], assay = "RNA")
+   
 }
-
 
 colnames(seurat_obj@meta.data)[colnames(seurat_obj@meta.data) == "pct_mito"] = "percent.mito"
 seurat_obj$log10GenesPerUMI <- log10(seurat_obj$nFeature_RNA)/log10(seurat_obj$nCount_RNA)
 
 # Add metadata
 cat("Adding metadata to merged_seurat_obj\n")
-sample_metadata <- rbind(project_metadata[i, ], project_metadata[i, ][rep(1, length(seurat_obj$nCount_RNA)-1), ])
+#sample_metadata <- rbind(project_metadata[sample, ], project_metadata[sample, ][rep(1, length(seurat_obj$nCount_RNA)-1), ])
 #seurat_obj@meta.data <- cbind(seurat_obj@meta.data, sample_metadata)
 
 # Let's create `ID` identifying variable in the Seurat metadata that also exists in the project_metadata
@@ -286,7 +279,7 @@ row.names(add_data) <- row.names(seurat_obj[[]])
 seurat_obj <- AddMetaData(seurat_obj, metadata = add_data)
 saveRDS(seurat_obj, file.path(results_dir, "/", "seurat_obj_raw.rds")) # Save raw Seurat object
   
-cat("Number of cells before filter for", sample_name[i], ":", "\n")
+cat("Number of cells before filter for", sample, ":", "\n")
 cells_before_filter_num <- print(ncol(seurat_obj)) # Number of cells before filter
 ```
 
@@ -297,27 +290,27 @@ Here, `r print_message`.
 Next, we will plot distribution of the number of genes, UMI, and percent mitochondrial reads per cell before filtering any low-quality cells. 
 
 ```{r plot-data-before-filtering, fig.width = 14, fig.height = 8, fig.fullwidth = TRUE, echo=TRUE}
-cat("Generating QC plots for RAW data for sample", sample_name[i], "\n")
-fname <- paste0(samples_plots_dir, "/", sample_name[i], "_", "01", "_before_filter_vln_plot.png")
+cat("Generating QC plots for RAW data for sample", sample, "\n")
+fname <- paste0(samples_plots_dir, "/", sample, "_", "01", "_before_filter_vln_plot.png")
 p <- print(create_vln_plot(seurat_obj = seurat_obj, grouping = grouping, min_genes = min_genes, min_count = min_count, title_name = "Unfiltered-data", palette = palette_df))
 ggsave(file = fname, p, width = 8, height = 6, device = "png")
   
-Generate_QC_Plots_1(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "02", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_1(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "02", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_2(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "03", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_2(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "03", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_3(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "04", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_3(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "04", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_4(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "05", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_4(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "05", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_5(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "06", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_5(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "06", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_6(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "07", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_6(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "07", Analysis_Name = sample, 
                     File_Name = "QC_Raw_Data", palette = gradient_palette_df)
 ```
 
@@ -330,7 +323,7 @@ Here, the user can select to implement the following strategies to remove low qu
    - `step 2`: `Find_Outlier_Thershold` function. This is an optional step (as defined in the `params`). 
 
 ```{r run-miQC, echo=TRUE}
-cat("Run miQC for", sample_name[i], "\n")
+cat("Run miQC for", sample, "\n")
 sce <- as.SingleCellExperiment(seurat_obj) # Create sce
 
 # Indicates whether or not to use miQC
@@ -351,7 +344,7 @@ if (use_miQC == "YES"){
 # Number of cells after filtering
 
 ```{r filter-data, echo=TRUE}
-cat("Number of cells after filtering for sample", sample_name[i], ":", "\n")
+cat("Number of cells after filtering for sample", sample, ":", "\n")
 cells_so_after_filter_num <- print(ncol(seurat_obj)) # Number of cells after filter
 ```
 
@@ -359,13 +352,13 @@ cells_so_after_filter_num <- print(ncol(seurat_obj)) # Number of cells after fil
 We will calculate percentage of cells expressing each gene and their mean.
 
 ```{r plot-cells-genes, fig.width = 5, fig.height = 5, fig.fullwidth = TRUE, echo=TRUE}
-cat("Number of cells express a specific gene for sample", sample_name[i], "\n")
+cat("Number of cells express a specific gene for sample", sample, "\n")
 pct_cells <- apply(as.data.frame(seurat_obj@assays$RNA@counts), 1, function(x) (sum(x != 0))) / ncol(seurat_obj@assays$RNA@counts)
 gene_means <- rowMeans(as.data.frame(seurat_obj@assays$RNA@counts))
 p <- as.data.frame(cbind(pct_cells, gene_means)) %>%
   rownames_to_column("gene")
   
-fname <- paste0(samples_plots_dir, "/", sample_name[i], "_", "08", "_cells_num_per_gene.png")
+fname <- paste0(samples_plots_dir, "/", sample, "_", "08", "_cells_num_per_gene.png")
 print(fname)
 set.seed(1234) # Set seed
 plot <- print(ggplot(data = p, aes(x = gene_means, y = pct_cells, label = gene)) +
@@ -381,12 +374,12 @@ ggsave(filename = fname, plot, width = 5, height = 5, device = "png") # Save the
 We will calculate the number of expressed genes in the library.
 
 ```{r plot-genes-library, fig.width = 5, fig.height = 5, fig.fullwidth = TRUE, echo=TRUE}
-cat("Number of expressed genes in the library for sample", sample_name[i], "\n")
+cat("Number of expressed genes in the library for sample", sample, "\n")
 num_genes <- apply(as.data.frame(seurat_obj@assays$RNA@counts), 2, function(x) (sum(x != 0))) # number of expressed genes
 libsize <- colSums(as.data.frame(seurat_obj@assays$RNA@counts))
 l  <- as.data.frame(cbind(num_genes, libsize)) 
   
-fname <- paste0(samples_plots_dir, "/", sample_name[i], "_", "09", "_genes_num_library.png")
+fname <- paste0(samples_plots_dir, "/", sample, "_", "09", "_genes_num_library.png")
 print(fname)
 set.seed(1234) # Set seed
 plot <- print(ggplot(data = l, aes(x = log10(libsize), y = num_genes)) +
@@ -401,28 +394,28 @@ ggsave(filename = fname, plot, width = 5, height = 5, device = "png") # Save the
 Next, we will plot distribution of the number of genes, UMI, and percent mitochondrial reads per cell after filtering any low-quality cells. 
 
 ```{r plot-data-after-filter, fig.width = 14, fig.height = 8, fig.fullwidth = TRUE, echo=TRUE}
-cat("Generating QC plots for FILTERED data for sample", sample_name[i], "\n")
-fname <- paste0(samples_plots_dir, "/", sample_name[i], "_", "10", "_after_filter_vln_plot.png")
+cat("Generating QC plots for FILTERED data for sample", sample, "\n")
+fname <- paste0(samples_plots_dir, "/", sample, "_", "10", "_after_filter_vln_plot.png")
 print(fname)
 p <- print(create_vln_plot(seurat_obj = seurat_obj, grouping = grouping, min_genes = min_genes, min_count = min_count, title_name = "Filtered-data", palette = palette_df))
 ggsave(file = fname, p, width = 8, height = 6, device = "png")
 
-Generate_QC_Plots_1(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "11", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_1(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "11", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_2(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "12", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_2(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "12", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_3(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "13", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_3(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "13", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_4(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "14", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_4(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "14", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_5(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "15", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_5(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "15", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 
-Generate_QC_Plots_6(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "16", Analysis_Name = sample_name[i], 
+Generate_QC_Plots_6(Seurat_obj = seurat_obj, Project_Path = seurat_qc_plots_dir, Figure_Total = "16", Analysis_Name = sample, 
                     File_Name = "QC_Filtered_Data", palette = gradient_palette_df)
 ```
 
@@ -448,7 +441,7 @@ if (cells_so_after_filter_num >= 500) {
   # This value is a commonly used threshold for many single-cell RNA-seq studies as a minimum for obtaining reliable and meaningful analysis. 
   
   print_message <- "we will proceed with processing of the seurat object and include the sample in the merged and integrated cohort for downstream analyses"
-  cat("Create and process seurat for sample", sample_name[i], "\n")
+  cat("Create and process seurat for sample", sample, "\n")
   seurat_obj <- Process_Seurat(seurat_obj = seurat_obj, nfeatures_value = nfeatures_value, Genome = genome_name,
                                Regress_Cell_Cycle = Regress_Cell_Cycle_value, assay = assay, num_pcs = num_pcs, 
                                prefix = prefix, num_dim = num_dim, num_neighbors = num_neighbors, results_dir = results_dir, 
@@ -456,7 +449,7 @@ if (cells_so_after_filter_num >= 500) {
                                condition1 = condition_value1, condition2 = condition_value2, condition3 = condition_value3, 
                                print_pdf = print_pdf, PCA_Feature_List = PCA_Feature_List_value)
   
-  cat("Save Seurat object for sample", sample_name[i], "\n")
+  cat("Save Seurat object for sample", sample, "\n")
   saveRDS(seurat_obj, file = paste0(results_dir, "/", "seurat_obj.rds")) # Save Seurat object
   
   } else {

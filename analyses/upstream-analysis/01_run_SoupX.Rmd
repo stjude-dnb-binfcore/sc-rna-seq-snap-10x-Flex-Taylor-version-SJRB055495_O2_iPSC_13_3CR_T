@@ -153,7 +153,8 @@ suppressPackageStartupMessages({
   library(tinytex)
   #library(SingleCellExperiment)
   library(Matrix)
-
+  library(glue)
+  
   # Evaluate Seurat R expressions asynchronously when possible using future package
   plan(multisession, workers = parallelly::availableCores())})
 ```
@@ -216,124 +217,95 @@ If contamination fraction estimate is > 20%, it is recommended to set `rho` manu
 
 ```{r run-SoupX, echo=TRUE}
 # Create contamination summary table
-contamination_summary <- matrix(ncol = 4, nrow = 1) %>% as.data.frame()
-colnames(contamination_summary) <- c("sample_name", "rho_estimated_by_SoupX", "rho_adjusted", "rho_removed")
+#contamination_summary <- matrix(ncol = 4, nrow = 1) %>% as.data.frame()
+#colnames(contamination_summary) <- c("sample_name", "rho_estimated_by_SoupX", "rho_adjusted", "rho_removed")
+contamination_summary <- data.frame(Sample = character(),
+                                    Estimated_Soup_Fraction = numeric(),
+                                    Set_to_Default = character(),
+                                    Default_Soup_Fraction = numeric(),
+                                    stringsAsFactors = FALSE)
 
-for (i in seq_along(sample_name)) {
+input_dir <- yaml$data_dir
+cellranger_parameters <- yaml$cellranger_parameters
+
+# Process each sample
+multi_config_dirs <- Sys.glob(file.path(input_dir, cellranger_parameters, "multi_config_*"))
+
+for (config_dir in multi_config_dirs) {
+  per_sample_outs_dir <- file.path(config_dir, glue("multi_run_{cellranger_parameters}"), "outs", "per_sample_outs")
+  samples_found <- list.dirs(per_sample_outs_dir, full.names = FALSE, recursive = FALSE)
   
-  cat("Beginning to process sample", sample_name[i], "\n")
-
-  # Create directory 
-  samples_SoupX_results_dir <- file.path(SoupX_results_dir, sample_name[i]) 
-  if (!dir.exists(samples_SoupX_results_dir)) {
-    dir.create(samples_SoupX_results_dir)}
-  print(samples_SoupX_results_dir)
-
-  #strainedCounts_SoupX_results_dir <- file.path(samples_SoupX_results_dir, "strainedCounts") 
-  #if (!dir.exists(strainedCounts_SoupX_results_dir)) {
-  #  dir.create(strainedCounts_SoupX_results_dir)}
-  # print(strainedCounts_SoupX_results_dir)
-  
-  cat("Reading in data\n")
-  
-  #filtered_matrix_file <- file.path(data_dir, sample_name[i], "outs", "filtered_feature_bc_matrix.h5") 
-  #raw_matrix_file <- file.path(data_dir, sample_name[i], "outs", "raw_feature_bc_matrix.h5") 
-  #clusters_file <- file.path(data_dir, sample_name[i], "outs", "analysis", "clustering", "gene_expression_graphclust", "clusters.csv") 
-
-  
-  filtered_matrix_file <- file.path(data_dir, "outs", "per_sample_outs", sample_name[i], "count", "sample_filtered_feature_bc_matrix.h5") 
-  raw_matrix_file <- file.path(data_dir, "outs", "per_sample_outs", sample_name[i], "count", "sample_raw_feature_bc_matrix.h5") 
-  clusters_file <- file.path(data_dir, "outs", "per_sample_outs", sample_name[i], "count", "analysis", "clustering", "gene_expression_graphclust", "clusters.csv") 
-
-  # Read data
-  filtered_matrix <- Seurat::Read10X_h5(filtered_matrix_file, use.names = TRUE)
-  raw_matrix <- Seurat::Read10X_h5(raw_matrix_file, use.names = TRUE)
-  clusters <- read.csv(clusters_file)
-  
-  # Save plot
-  #pdf(file = paste0(SoupX_plots_dir, "/", sample_name[i], "_SoupX_contamination_fraction_plot.pdf", sep = ""))
-  
-  # Create df
-  mDat <- data.frame(clusters=clusters$Cluster, row.names=clusters$Barcode)
-  
-  
-  ###########################################################################################################################################
-  # Read the features.tsv.gz file to get feature types
-  features_file <- file.path(data_dir, "outs", "per_sample_outs", sample_name[i], "count", "sample_raw_feature_bc_matrix", "features.tsv.gz") 
-
-  features <- read.delim(features_file, header = FALSE, stringsAsFactors = FALSE)
-
-  # Assign column names for clarity
-  colnames(features) <- c("gene_id", "gene_name", "feature_type")
-
-  # Only keep "Gene Expression" genes
-  gene_expression_genes <- features$gene_name[features$feature_type == "Gene Expression"]
-  
-  # Filter both matrices by gene names using intersection
-  common_genes <- intersect(rownames(raw_matrix), rownames(filtered_matrix))
-  common_genes <- intersect(common_genes, gene_expression_genes)
-
-  # Subset both matrices to the common, gene expression genes
-  raw_matrix <- raw_matrix[common_genes, ]
-  filtered_matrix <- filtered_matrix[common_genes, ]
-
-  # Sanity check
-  stopifnot(identical(rownames(raw_matrix), rownames(filtered_matrix)))
-  ########################################################################################################################################### 
-  
-  # Make a “SoupChannel”, the object needed to run SoupX
-  sc_raw <- SoupChannel(raw_matrix, filtered_matrix, mDat)
-
-  # Estimate contamination fraction rho
-  #sc <- autoEstCont(sc_raw, forceAccept = TRUE)
-  sc <- autoEstCont(sc_raw, forceAccept = TRUE, tfidfMin = 0.1, soupQuantile = 0.9)
-
-  print(sc)
-  soup_fraction_value <- sc$fit$rhoEst
-  
-  # To not remove more than 20% background
-  if (soup_fraction_value > 0.2) {
-    print(soup_fraction_value)
-    cat("Estimated soup fraction >20%, set to 5% by default.\n")
-    sc = setContaminationFraction(sc_raw, soup_fraction_value_default)
-    contamination_summary[i,] <- c(sample_name[i], soup_fraction_value, "yes", soup_fraction_value_default)
+  for (sample in samples_found) {
+    cat("Beginning process for:", sample, "\n")
+    sample_input_dir <- file.path(per_sample_outs_dir, sample)
+    
+    # Create directory 
+    samples_SoupX_results_dir <- file.path(SoupX_results_dir, sample) 
+    if (!dir.exists(samples_SoupX_results_dir)) dir.create(samples_SoupX_results_dir)
+    print(samples_SoupX_results_dir)
+    
+    cat("Reading in data\n")
+    filtered_matrix_file <- file.path(per_sample_outs_dir, sample, "count", "sample_filtered_feature_bc_matrix.h5") 
+    raw_matrix_file <- file.path(per_sample_outs_dir, sample, "count", "sample_raw_feature_bc_matrix.h5") 
+    clusters_file <- file.path(per_sample_outs_dir, sample, "count", "analysis", "clustering", "gene_expression_graphclust", "clusters.csv") 
+    
+    filtered_matrix <- Seurat::Read10X_h5(filtered_matrix_file, use.names = TRUE)
+    raw_matrix <- Seurat::Read10X_h5(raw_matrix_file, use.names = TRUE)
+    clusters <- read.csv(clusters_file)
+    
+    mDat <- data.frame(clusters = clusters$Cluster, row.names = clusters$Barcode)
+    
+    features_file <- file.path(per_sample_outs_dir, sample, "count", "sample_raw_feature_bc_matrix", "features.tsv.gz") 
+    features <- read.delim(features_file, header = FALSE, stringsAsFactors = FALSE)
+    colnames(features) <- c("gene_id", "gene_name", "feature_type")
+    gene_expression_genes <- features$gene_name[features$feature_type == "Gene Expression"]
+    
+    common_genes <- intersect(rownames(raw_matrix), rownames(filtered_matrix))
+    common_genes <- intersect(common_genes, gene_expression_genes)
+    raw_matrix <- raw_matrix[common_genes, ]
+    filtered_matrix <- filtered_matrix[common_genes, ]
+    stopifnot(identical(rownames(raw_matrix), rownames(filtered_matrix)))
+    
+    sc_raw <- SoupChannel(raw_matrix, filtered_matrix, mDat)
+    sc <- autoEstCont(sc_raw, forceAccept = TRUE)
+    #sc <- autoEstCont(sc_raw, forceAccept = TRUE, tfidfMin = 0.1, soupQuantile = 0.9)
     print(sc)
+    soup_fraction_value <- sc$fit$rhoEst
+    
+    if (soup_fraction_value > 0.2) {
+      print(soup_fraction_value)
+      cat("Estimated soup fraction >20%, set to 5% by default.\n")
+      sc = setContaminationFraction(sc_raw, soup_fraction_value_default)
+      contamination_summary <- rbind(contamination_summary,
+        data.frame(
+          Sample = sample,
+          Estimated_Soup_Fraction = soup_fraction_value,
+          Set_to_Default = "yes",
+          Default_Soup_Fraction = soup_fraction_value_default
+        )
+      )
+      print(sc)
     } else {
-      cat("Estimated soup fraction\n is ", `soup_fraction_value`, "\n")
-      contamination_summary[i,] <- c(sample_name[i], soup_fraction_value, "no", soup_fraction_value)}
-   
-  # Correcting expression profile and clean data
-  # This will contain a corrected matrix to be used in place of the original table of counts in downstream analyses.
-  out <- adjustCounts(sc, roundToInt = TRUE) # roundToInt option to make sure we output integer matrix
-  colnames(out) <- paste0(sample_name[i], ":", colnames(out))
-  colnames(out) = gsub('-1$','', colnames(out)) # remove -1
-  
-  #DropletUtils:::write10xCounts(paste(SoupX_results_dir, "./strainedCounts", sep = ""), out_merge, overwrite = TRUE) #library(DropletUtils)
-  #write10xCounts(path = file.path(SoupX_results_dir, sample_name[i], "strainedCounts"), x = out) #library(SingleCellExperiment)
-  #Write10X(out_merge, path = file.path(SoupX_results_dir, "strainedCounts")) #library(Seurat)
-
-  #writeMM(out, file = file.path(strainedCounts_SoupX_results_dir, "matrix.mtx"))
-  
-  # Write barcodes (column names of the count matrix)
-  #write.table(colnames(out), file = file.path(strainedCounts_SoupX_results_dir, "barcodes.tsv"), 
-  #          quote = FALSE, row.names = FALSE, col.names = FALSE)
-
-  # Write features (row names of the count matrix)
-  #write.table(rownames(out), file = file.path(strainedCounts_SoupX_results_dir, "features.tsv"),
-  #          quote = FALSE, row.names = FALSE, col.names = FALSE)
-
-  saveRDS(out, file.path(samples_SoupX_results_dir, "mtx_corrected_SoupX.rds")) # Save combined matrices
-  
-  cat("Processing complete for sample", sample_name[i], "\n")
-  
-  # Let's combine corrected matrices from all samples 
-  # We will use this file in later stage of the `upstream-analysis` module
-  #  if(i==1) { 
-  #    out_merge <- out
-  #    } else {
-  #      out_merge <- cbind(out_merge, out) }
-  #dev.off()
+      cat("Estimated soup fraction is", soup_fraction_value, "\n")
+      contamination_summary <- rbind(contamination_summary,
+        data.frame(
+          Sample = sample,
+          Estimated_Soup_Fraction = soup_fraction_value,
+          Set_to_Default = "no",
+          Default_Soup_Fraction = NA
+        )
+      )
+    }
+    
+    out <- adjustCounts(sc, roundToInt = TRUE)
+    colnames(out) <- paste0(sample, ":", colnames(out))
+    colnames(out) <- gsub('-1$', '', colnames(out))
+    
+    saveRDS(out, file.path(samples_SoupX_results_dir, "mtx_corrected_SoupX.rds"))
+    cat("Processing complete for sample", sample, "\n")
+  }
 }
+
 ```
 
 # Contamination fraction `rho` per sample

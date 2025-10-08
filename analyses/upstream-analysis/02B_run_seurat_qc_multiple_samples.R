@@ -47,69 +47,84 @@ if (!dir.exists(seurat_results_dir)) {
 project_metadata_file <- file.path(metadata_dir, metadata_file) # metadata input file
 
 # Read metadata file and define `sample_name`
-project_metadata <- read.csv(project_metadata_file, sep = "\t", header = TRUE)
-sample_name <- unique(as.character(project_metadata$ID))
+# Read metadata
+project.metadata <- read.csv(project_metadata_file, sep = '\t', header = TRUE)
+sample_name <- unique(as.character(project.metadata$ID))
 sample_name <- sort(sample_name, decreasing = FALSE)
 print(sample_name)
-
+ 
 #####################################################################################
 # Run markdown script per each library
-for (i in seq_along(sample_name)){
+input_dir <- yaml$data_dir
+cellranger_parameters <- yaml$cellranger_parameters
 
-  # Create directory to save html reports
-  samples_plots_dir <- file.path(seurat_qc_plots_dir, sample_name[i]) 
-  if (!dir.exists(samples_plots_dir)) {
-    dir.create(samples_plots_dir)}
+# Process each sample within each lirary
+multi_config_dirs <- Sys.glob(file.path(input_dir, cellranger_parameters, "multi_config_*"))
+
+for (config_dir in multi_config_dirs) {
+  per_sample_outs_dir <- file.path(config_dir, glue::glue("multi_run_{cellranger_parameters}"), "outs", "per_sample_outs")
+  samples_found <- list.dirs(per_sample_outs_dir, full.names = FALSE, recursive = FALSE)
+  samples_found <- sort(samples_found, decreasing = FALSE)
+  print(samples_found)
+  
+  for (sample in samples_found) {
+    cat("Beginning process for:", sample, "\n")
+    sample_input_dir <- file.path(per_sample_outs_dir, sample)
+    sample_input_dir
     
-  # Create results_dir per sample
-  results_dir <- file.path(seurat_results_dir, sample_name[i])
-  if (!dir.exists(results_dir)) {
-    dir.create(results_dir)}
+    # Create directory to save html reports
+    samples_plots_dir <- file.path(seurat_qc_plots_dir, sample) 
+    if (!dir.exists(samples_plots_dir)) {
+          dir.create(samples_plots_dir)}
+    
+    # Create results_dir per sample
+    results_dir <- file.path(seurat_results_dir, sample)
+    if (!dir.exists(results_dir)) {
+          dir.create(results_dir)}
   
-  # Render and save html
-  rmarkdown::render("02A_run_seurat_qc.Rmd", 
-                    output_dir = file.path(samples_plots_dir),
-                    clean = TRUE, # using TRUE will clean intermediate files that are created during rendering
-                    output_file = c(paste('Report-', 'seurat-qc', '-', sample_name[i], '-', Sys.Date(), sep = '')),
-                    output_format = 'all',
-                    params = list(use_condition_split = yaml$use_condition_split_seurat_multiple_samples,
-                                  print_pdf = yaml$print_pdf_seurat_multiple_samples,
+     # Render and save html
+     rmarkdown::render("02A_run_seurat_qc.Rmd", 
+                         output_dir = file.path(samples_plots_dir),
+                                             clean = TRUE, # using TRUE will clean intermediate files that are created during rendering
+                         output_file = c(paste('Report-', 'seurat-qc', '-', sample, '-', Sys.Date(), sep = '')),
+                         output_format = 'all',
+                         params = list(use_condition_split = yaml$use_condition_split_seurat_multiple_samples,
+                                       print_pdf = yaml$print_pdf_seurat_multiple_samples,
 
-                                  data_dir = yaml$data_dir,
-                                  grouping = yaml$grouping,
-                                  genome_name = yaml$genome_name_upstream,
-                                  Regress_Cell_Cycle_value = yaml$Regress_Cell_Cycle_value,
-                                  assay = yaml$assay_seurat_qc,
-                                  min_genes = yaml$min_genes, 
-                                  min_count = yaml$min_count,
-                                  mtDNA_pct_default = yaml$mtDNA_pct_default,
-                                  normalize_method = yaml$normalize_method,
-                                  num_pcs = yaml$num_pcs,
-                                  num_dim = yaml$num_dim_seurat_qc,
-                                  num_neighbors = yaml$num_neighbors_seurat_qc,
-                                  nfeatures_value = yaml$nfeatures_value,
-                                  prefix = yaml$prefix,
-                                  use_miQC = yaml$use_miQC,
-                                  use_only_step1 = yaml$use_only_step1,
-                                  condition_value1 = yaml$condition_value1,
-                                  condition_value2 = yaml$condition_value2,
-                                  condition_value3 = yaml$condition_value3,
-                                  PCA_Feature_List_value = yaml$PCA_Feature_List_value,
-                                  use_SoupX_filtering = yaml$use_SoupX_filtering_seurat_qc,
+                                       data_dir = yaml$data_dir,
+                                       grouping = yaml$grouping,
+                                       genome_name = yaml$genome_name_upstream,
+                                       Regress_Cell_Cycle_value = yaml$Regress_Cell_Cycle_value,
+                                       assay = yaml$assay_seurat_qc,
+                                       min_genes = yaml$min_genes, 
+                                       min_count = yaml$min_count,
+                                       mtDNA_pct_default = yaml$mtDNA_pct_default,
+                                       normalize_method = yaml$normalize_method,
+                                       num_pcs = yaml$num_pcs,
+                                       num_dim = yaml$num_dim_seurat_qc,
+                                       num_neighbors = yaml$num_neighbors_seurat_qc,
+                                       nfeatures_value = yaml$nfeatures_value,
+                                       prefix = yaml$prefix,
+                                       use_miQC = yaml$use_miQC,
+                                       use_only_step1 = yaml$use_only_step1,
+                                       condition_value1 = yaml$condition_value1,
+                                       condition_value2 = yaml$condition_value2,
+                                       condition_value3 = yaml$condition_value3,
+                                       PCA_Feature_List_value = yaml$PCA_Feature_List_value,
+                                       use_SoupX_filtering = yaml$use_SoupX_filtering_seurat_qc,
                                   
-                                  # the following parameters are the same across the module #
-                                  PROJECT_NAME = yaml$PROJECT_NAME,
-                                  PI_NAME = yaml$PI_NAME,
-                                  TASK_ID = yaml$TASK_ID,
-                                  PROJECT_LEAD_NAME = yaml$PROJECT_LEAD_NAME,
-                                  DEPARTMENT = yaml$DEPARTMENT,
-                                  LEAD_ANALYSTS = yaml$LEAD_ANALYSTS,
-                                  GROUP_LEAD = yaml$GROUP_LEAD,
-                                  CONTACT_EMAIL = yaml$CONTACT_EMAIL,
-                                  PIPELINE = yaml$PIPELINE, 
-                                  START_DATE = yaml$START_DATE,
-                                  COMPLETION_DATE = yaml$COMPLETION_DATE))
-  
-}
-
+                                       # the following parameters are the same across the module #
+                                       PROJECT_NAME = yaml$PROJECT_NAME,
+                                       PI_NAME = yaml$PI_NAME,
+                                       TASK_ID = yaml$TASK_ID,
+                                       PROJECT_LEAD_NAME = yaml$PROJECT_LEAD_NAME,
+                                       DEPARTMENT = yaml$DEPARTMENT,
+                                       LEAD_ANALYSTS = yaml$LEAD_ANALYSTS,
+                                       GROUP_LEAD = yaml$GROUP_LEAD,
+                                       CONTACT_EMAIL = yaml$CONTACT_EMAIL,
+                                       PIPELINE = yaml$PIPELINE, 
+                                       START_DATE = yaml$START_DATE,
+                                       COMPLETION_DATE = yaml$COMPLETION_DATE))
+                                       }
+                                       }
 #################################################################################
