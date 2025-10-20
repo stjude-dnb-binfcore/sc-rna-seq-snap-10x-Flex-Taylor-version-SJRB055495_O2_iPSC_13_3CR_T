@@ -23,7 +23,7 @@
 5. [How to Use the Repository](#how-to-use-the-repository)
    - [Accessing the Code](#accessing-the-code)
    - [Running the Code](#running-the-code)
-6. [Requesting Resources from the HPCF Cluster](#requesting-resources-from-the-hpcf-cluster)
+6. [Requesting CPU and Memory Resources](#requesting-cpu-and-memory-resources)
 
 
 
