@@ -6,7 +6,7 @@
     <img src="https://www.repostatus.org/badges/latest/active.svg?style=for-the-badge" alt="The project has reached a stable, usable state and is being actively developed." />
   </a>
   <a href="https://github.com/stjude-dnb-binfcore/sc-rna-seq-snap-10x-Flex">
-    <img src="https://img.shields.io/badge/version-1.0.0.beta-brightgreen" alt="Version" />
+    <img src="https://img.shields.io/badge/version-1.0.0.beta.1-brightgreen" alt="Version" />
   </a>
 </p>
 
@@ -23,7 +23,7 @@
 5. [How to Use the Repository](#how-to-use-the-repository)
    - [Accessing the Code](#accessing-the-code)
    - [Running the Code](#running-the-code)
-6. [Requesting Resources from the HPCF Cluster](#requesting-resources-from-the-hpcf-cluster)
+6. [Requesting CPU and Memory Resources](#requesting-cpu-and-memory-resources)
 
 
 
@@ -41,13 +41,21 @@ Note: While the tutorial outlines general best practices for running the pipelin
 
 ### Preparing project metadata
 
-The pipeline requires a TSV file containing essential metadata for cohort analysis. The file must be named `project_metadata.tsv`. It can include one or more samples, as long as it contains at least the following columns in this exact order: `ID`, `SAMPLE`, and `FASTQ`. The `ID` column must contain unique values. The `SAMPLE` column must contain the `seq_submission_code` along with the ID, e.g., `seq_submission_code1_sample1` or the corresponding library name. The `FASTQ` column must contain the file path to the fastq files. For samples with top-ups or multiple technical replicates, list all associated library names and FASTQ file paths in the same row, using commas to separate each path. Additional metadata columns can be added and arranged as needed by the user (though not required).
+The pipeline requires a metadata TSV file named `project_metadata.tsv` to enable cohort analysis. This TSV file must include at least the following columns, in this exact order: `ID`, `SAMPLE`, and `FASTQ`.
 
-The file can be stored anywhere, but its filepath must be specified in the `project_parameters.Config.yaml` file.
+  - `ID`: Each value must be unique and should exactly match the `sample_id` values specified in the `multi_config` CSV files found in `/data/cellranger_input_files/multi_config_files/`. Cell Ranger names its output directories based on these `sample_id` values, and the upstream_analysis module uses the `ID` column to locate and process the correct Cell Ranger outputs during QC steps. For best results, double-check that every `ID` in your project metadata matches the corresponding `sample ID` in your configuration files.
+  - `SAMPLE`: Should include the `seq_submission_code` along with the `ID` (e.g., `seq_submission_code1_sample1`) or the corresponding library name.
+  - `FASTQ`: Should provide the file path(s) to the associated FASTQ files. 
 
-For user convenience, an example [project_metadata.tsv](https://github.com/stjude-dnb-binfcore/sc-rna-seq-snap-10x-Flex/blob/main/data/project_metadata) file is provided.
+Additional metadata columns can be added and arranged as needed by the user (though not required).
 
+The `project_metadata.tsv` file can be stored anywhere, but you must specify its file path in your `project_parameters.Config.yaml` file.
+
+For reference, see the example `project_metadata.tsv` file provided in the repository.
+
+**Note**:
 Additionally, a separate TSV file is required with a different structure to run the `fastqc-analysis` module. See the [README.md](https://github.com/stjude-dnb-binfcore/sc-rna-seq-snap-10x-Flex/blob/main/analyses/fastqc-analysis/README.md).
+
 
 ### How to Use the Repository
 
