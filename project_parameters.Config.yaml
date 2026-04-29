@@ -162,7 +162,7 @@ OrgDb_value: "org.Hs.eg.db"   # Options for gene annotation: (1) Human: "org.Hs.
 # (1) Background matches experiment: results are usually more conservative and more interpretable
 universe_value_module: "YES" # Options: "YES" (If YES, enrichment is run against all genes in the universe) or "NO" (default)
 show_number_pathways_value_module: 20 # Number of top pathways to show in the dot plot visualization
-future_globals_value_dego: 200 # Default. Adjust based on dataset size and available memory. See `future_globals_value_upstream` in the `upstream-analysis` module for more details.
+future_globals_value_dego: 400 # Default. Adjust based on dataset size and available memory. See `future_globals_value_upstream` in the `upstream-analysis` module for more details.
 
 
 # `./analyses/project-updates`
